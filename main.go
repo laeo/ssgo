@@ -60,7 +60,7 @@ func main() {
 		})
 	})
 
-	m.Start("127.0.0.1:" + flags.port)
+	m.Start(":" + flags.port)
 }
 
 func setupEvents() {
