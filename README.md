@@ -19,7 +19,7 @@ credentials[port,token,cipher] 管理器监视凭据信息的增删操作，自�
 
 GET     /api/v1/users => shows detail of all users.
 
-POST    /api/v1/users [port, token, method] => create user port.
+POST    /api/v1/users [port, token, cipher] => create user port.
 
 GET     /api/v1/details => shows server details. [bandwidth,traffic,load]
 
@@ -32,11 +32,11 @@ $ curl /api/v1/users
     [
         "port": 1080,
         "token": "example",
-        "method": "aes-256-cfb"
+        "cipher": "aes-256-cfb"
     ]
 }
 
-$ curl -X post --data '{"port":10080,"token":"example","method":"aes-256-cfb"}' /api/v1/users
+$ curl -X post --data '{"port":10080,"token":"example","cipher":"aes-256-cfb"}' /api/v1/users
 
 {
     "code": 200,
