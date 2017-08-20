@@ -8,7 +8,7 @@ import (
 type Port struct {
 	Port   string `json:"port"`
 	Token  string `json:"token"`
-	Cipher string `json:"cipher"`
+	Method string `json:"method"`
 }
 
 //Natmap used for manage connections.
@@ -32,13 +32,13 @@ func findOrNew(port string) *Port {
 	return n.Ports[port]
 }
 
-func Save(port, token, cipher string) {
+func Save(port, token, method string) {
 	n.Lock()
 
 	p := findOrNew(port)
 	p.Port = port
 	p.Token = token
-	p.Cipher = cipher
+	p.Method = method
 
 	n.Unlock()
 

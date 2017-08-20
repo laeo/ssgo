@@ -1,13 +1,9 @@
 package msocket
 
-import (
-	"github.com/doubear/ssgo/mcrypto"
-)
-
 var socks = map[string]*SocketD{}
 
-func Up(port string, cipher mcrypto.Cipher) {
-	socks[port] = newSocketD(port, cipher)
+func Up(port string) {
+	socks[port] = newSocketD(port)
 	go socks[port].HandleTCPConn()
 	go socks[port].HandleUDPConn()
 }

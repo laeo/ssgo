@@ -4,14 +4,14 @@ import (
 	"log"
 	"net"
 
-	"github.com/doubear/ssgo/mcrypto"
+	"github.com/doubear/ssgo/mstat"
+	"github.com/doubear/ssgo/utils"
 )
 
 type SocketD struct {
 	stopCh chan struct{}
 	tcp    net.Listener
 	udp    net.PacketConn
-	cipher mcrypto.Cipher
 	port   string
 }
 
@@ -40,7 +40,6 @@ func (s *SocketD) HandleTCPConn() {
 
 		conn.(*net.TCPConn).SetKeepAlive(true)
 
-		conn = s.cipher.StreamConn(conn)
 		go handleTCPConn(conn, s)
 	}
 }
@@ -52,10 +51,45 @@ func (s *SocketD) HandleUDPConn() {
 			s.udp.Close()
 			return
 		}
+
+		b := make([]byte, 64*1024)
+		n, _, err := s.udp.ReadFrom(b)
+		if err != nil {
+			log.Printf("[UDP] remote error: %v", err)
+			continue
+		}
+
+		ndst := utils.SplitAddr(b[:n])
+		if ndst == nil {
+			log.Printf("[UDP] parse addr fails: %v", err)
+			continue
+		}
+
+		ndstr, err := net.ResolveUDPAddr("udp", ndst.String())
+		if err != nil {
+			log.Printf("[UDP] unable to resolves addr %v", err)
+			continue
+		}
+
+		payload := b[len(ndst):n]
+
+		pc, err := net.ListenPacket("udp", "")
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		nn, err := pc.WriteTo(payload, ndstr)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		mstat.Update(s.port, int64(nn))
 	}
 }
 
-func newSocketD(p string, m mcrypto.Cipher) *SocketD {
+func newSocketD(p string) *SocketD {
 
 	tcp, err := net.Listen("tcp", ":"+p)
 	if err != nil {
