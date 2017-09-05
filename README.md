@@ -1,21 +1,14 @@
-# ssgo - a new shadowsocks server that controlled with web API.
+# 手撕苟 —— 爬到墙外去，让我念句诗 (- -)
 
-credentials[port,token,cipher] 管理器监视凭据信息的增删操作，自动调用socket连接管理器创建、关闭net监听。
+通过Web API动态创建“阵法”通道。
 
+纯属个人学习苟语言的产物，三无产品无保障，欢迎并感谢star。
 
+## 安装
 
-## Installation
+暂无，描绘中……
 
-### standalone !!! 1st
-
-./ssgo --port=5001 --token=123456 --locally
-
-### slave
-
-./ssgo --ctrl-with=https://example.org/api/v1/slaves/i37e/auth?token=123456
-
-## API Design
-
+## 接口设计
 
 GET     /api/v1/users => shows detail of all users.
 
@@ -24,7 +17,7 @@ POST    /api/v1/users [port, token, cipher] => create user port.
 GET     /api/v1/details => shows server details. [bandwidth,traffic,load]
 
 
-## Usage
+## 用法
 
 $ curl /api/v1/users
 
