@@ -4,10 +4,12 @@ import (
 	"flag"
 	"log"
 
-	"github.com/doubear/ssgo/mauth"
-	"github.com/doubear/ssgo/mcrypto"
-	"github.com/doubear/ssgo/msocket"
 	"gopkg.in/mango.v0"
+
+	"github.com/doubear/ssgo/sockd"
+
+	"github.com/doubear/ssgo/auth"
+	"github.com/doubear/ssgo/event"
 )
 
 var flags struct {
@@ -26,64 +28,47 @@ func init() {
 }
 
 func main() {
+	setupEventHandler()
 
-	setupEvents()
-
-	syncCredentials()
-
-	m := mango.Default()
+	m := mango.New()
 	m.Group("/api/v1", func(v1 *mango.GroupRouter) {
 
-		v1.Get("/users", func(ctx *mango.Context) (int, interface{}) {
-			return 200, mauth.Ports()
+		//get users list
+		v1.Get("users", func(ctx *mango.Context) (int, interface{}) {
+			return 200, auth.List()
 		})
 
-		v1.Post("/users", func(ctx *mango.Context) (int, interface{}) {
+		//add user
+		v1.Post("users", func(ctx *mango.Context) (int, interface{}) {
+			c := &auth.Credential{}
+			ctx.JSON(c)
 
-			p := mauth.Port{}
-			ctx.JSON(&p)
-
-			if p.Port == "" || p.Cipher == "" || p.Token == "" {
-				return 400, nil
+			if c.Test() {
+				auth.Add(c)
+				return 200, c
 			}
 
-			if mauth.Exists(p.Port) {
-				return 409, nil
-			}
-
-			mauth.Save(p.Port, p.Token, p.Cipher)
-
-			return 200, nil
-		})
-
-		v1.Delete("/users/{port}", func(ctx *mango.Context) (int, interface{}) {
-			mauth.Delete(ctx.Param("port", ""))
-			return 200, nil
+			return 409, nil
 		})
 	})
 
-	m.Start(":" + flags.port)
+	m.Start(":5001")
+
+	// c := make(chan os.Signal)
+	// signal.Notify(c, os.Interrupt, os.Kill)
+	// <-c
 }
 
-func setupEvents() {
-	mauth.Saved(func(p *mauth.Port) {
-		log.Printf("<mauth> saved port %s with cipher %s.", p.Port, p.Cipher)
-
-		c, err := mcrypto.PickCipher(p.Cipher, nil, p.Token)
-		if err != nil {
-			log.Println(err)
-			mauth.Delete(p.Port)
-		}
-
-		msocket.Up(p.Port, c)
+func setupEventHandler() {
+	event.Add("credential.saved", func(p interface{}) {
+		c := p.(*auth.Credential)
+		sockd.Attach(c)
+		log.Println("attached sockd service at ", c.Port)
 	})
 
-	mauth.Deleted(func(p *mauth.Port) {
-		log.Printf("<mauth> deleted port %s.", p.Port)
-		msocket.Down(p.Port)
+	event.Add("credential.deleted", func(p interface{}) {
+		c := p.(*auth.Credential)
+		sockd.Detach(c)
+		log.Println("detached sockd service from ", c.Port)
 	})
-}
-
-func syncCredentials() {
-	//sync credentials from master server.
 }
