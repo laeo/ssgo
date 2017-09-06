@@ -18,34 +18,33 @@ func relayStream(c *auth.Credential, cip codec.Cipher, stopCh chan struct{}) {
 		return
 	}
 
-	log.Println("start listen on tcp://", c.Port)
+	log.Println("start listen on tcp", c.Port)
 
 	for {
-
 		select {
 		case <-stopCh:
 			break
+		default:
+			local, err := serve.Accept()
+			if err != nil {
+				log.Print(err)
+				continue
+			}
+
+			log.Println("accepted stream from ", local.RemoteAddr().String())
+
+			local.(*net.TCPConn).SetKeepAlive(true)
+
+			iv := make([]byte, cip.IVSize())
+			_, err = local.Read(iv[:])
+			if err != nil {
+				log.Print(err)
+				continue
+			}
+
+			cc := codec.New(cip, iv)
+			go handleTCPConn(codec.StreamConn(local, cc))
 		}
-
-		local, err := serve.Accept()
-		if err != nil {
-			log.Print(err)
-			continue
-		}
-
-		log.Println("accepted stream from ", local.RemoteAddr().String())
-
-		local.(*net.TCPConn).SetKeepAlive(true)
-
-		iv := make([]byte, cip.IVSize())
-		_, err = local.Read(iv[:])
-		if err != nil {
-			log.Print(err)
-			continue
-		}
-
-		cc := codec.New(cip, iv)
-		go handleTCPConn(codec.StreamConn(local, cc))
 	}
 }
 
