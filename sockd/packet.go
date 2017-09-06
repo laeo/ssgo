@@ -27,43 +27,48 @@ func relayPacket(c *auth.Credential, cip codec.Cipher, stopCh chan struct{}) {
 
 	log.Println("start linsten on udp://", c.Port)
 	for {
-		n, addr, err := serve.ReadFrom(b)
-		if err != nil {
-			log.Print(err)
-			continue
-		}
-
-		log.Println("new UDP connection from ", addr.String())
-
-		n, s, err := spec.ResolveRemoteFromBytes(b[:n])
-		if err != nil {
-			log.Print(err)
-			continue
-		}
-
-		payload := b[n:]
-
-		raddr, err := net.ResolveUDPAddr("udp", s.String())
-		if err != nil {
-			log.Print(err)
-			continue
-		}
-
-		pc := nm.Get(addr.String())
-		if pc == nil {
-			pc, err = net.ListenPacket("udp", "")
+		select {
+		case <-stopCh:
+			break
+		default:
+			n, addr, err := serve.ReadFrom(b)
 			if err != nil {
-				log.Printf("UDP remote listen error: %v", err)
+				log.Print(err)
 				continue
 			}
 
-			nm.Add(raddr, serve, pc, true)
-		}
+			log.Println("new UDP connection from ", addr.String())
 
-		_, err = pc.WriteTo(payload, raddr) // accept only UDPAddr despite the signature
-		if err != nil {
-			log.Printf("UDP remote write error: %v", err)
-			continue
+			n, s, err := spec.ResolveRemoteFromBytes(b[:n])
+			if err != nil {
+				log.Print(err)
+				continue
+			}
+
+			payload := b[n:]
+
+			raddr, err := net.ResolveUDPAddr("udp", s.String())
+			if err != nil {
+				log.Print(err)
+				continue
+			}
+
+			pc := nm.Get(addr.String())
+			if pc == nil {
+				pc, err = net.ListenPacket("udp", "")
+				if err != nil {
+					log.Printf("UDP remote listen error: %v", err)
+					continue
+				}
+
+				nm.Add(raddr, serve, pc, true)
+			}
+
+			_, err = pc.WriteTo(payload, raddr) // accept only UDPAddr despite the signature
+			if err != nil {
+				log.Printf("UDP remote write error: %v", err)
+				continue
+			}
 		}
 	}
 }
@@ -72,6 +77,15 @@ type nat struct {
 	sync.RWMutex
 	pc      map[string]net.PacketConn
 	timeout time.Duration
+}
+
+func newNat() *nat {
+	n := &nat{}
+	n.RWMutex = sync.RWMutex{}
+	n.pc = make(map[string]net.PacketConn)
+	n.timeout = 5 * time.Minute
+
+	return n
 }
 
 func (n *nat) Add(peer net.Addr, dst, src net.PacketConn, srcIncluded bool) {
@@ -112,13 +126,6 @@ func (n *nat) Del(k string) (pc net.PacketConn) {
 	n.Unlock()
 
 	return
-}
-
-func newNat() *nat {
-	n := &nat{}
-	n.timeout = 5 * time.Minute
-
-	return n
 }
 
 func timedCopy(dst net.PacketConn, target net.Addr, src net.PacketConn, timeout time.Duration, srcIncluded bool) error {

@@ -15,10 +15,14 @@ type Stream struct {
 
 //StreamConn makes codec wrapped stream connnection
 func StreamConn(sc net.Conn, cc *Codec) net.Conn {
-	return &Stream{
+	s := &Stream{
 		sc,
 		cc,
 	}
+
+	s.Conn.Write(s.eiv)
+
+	return s
 }
 
 func (s *Stream) Read(b []byte) (n int, err error) {
