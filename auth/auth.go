@@ -59,6 +59,12 @@ func Has(p string) bool {
 	return ok
 }
 
-func List() map[string]*Credential {
-	return credentials
+func List() []*Credential {
+	l := []*Credential{}
+
+	for _, c := range credentials {
+		l = append(l, c)
+	}
+
+	return l
 }
