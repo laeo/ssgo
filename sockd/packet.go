@@ -85,7 +85,7 @@ func newNat() *nat {
 	n := &nat{}
 	n.RWMutex = sync.RWMutex{}
 	n.pc = make(map[string]net.PacketConn)
-	n.timeout = 5 * time.Minute
+	n.timeout = 30 * time.Second
 
 	return n
 }
@@ -137,6 +137,12 @@ func timedCopy(dst net.PacketConn, target net.Addr, src net.PacketConn, timeout 
 		src.SetReadDeadline(time.Now().Add(timeout))
 		n, raddr, err := src.ReadFrom(buf[0:])
 		if err != nil {
+			if op, ok := err.(*net.OpError); ok {
+				if op.Timeout() {
+					return nil
+				}
+			}
+
 			log.Println("[udp]", err.Error())
 			return err
 		}
@@ -150,12 +156,15 @@ func timedCopy(dst net.PacketConn, target net.Addr, src net.PacketConn, timeout 
 
 		log.Println("[udp] receives response from", raddr.String())
 
-		// copy(buf[:an], srcAddr) //prepend src into buf
-		// copy(buf[an:], buf[:n])
-
 		_, err = dst.WriteTo(append(srcAddr[:], buf[:n]...), target)
 
 		if err != nil {
+			if op, ok := err.(*net.OpError); ok {
+				if op.Timeout() {
+					return nil
+				}
+			}
+
 			log.Println("[udp]", err.Error())
 			return err
 		}
