@@ -4,19 +4,21 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"strconv"
+	"strings"
 )
 
 const (
 	//RATypeIPv4 address type in IPv4
-	RATypeIPv4 = 1
+	RATypeIPv4 = 0x01
 
 	//RATypeDomain address type in domain
-	RATypeDomain = 3
+	RATypeDomain = 0x03
 
 	//RATypeIPv6 address type in IPv6
-	RATypeIPv6 = 4
+	RATypeIPv6 = 0x04
 )
 
 //MaxRALen max length of remote address
@@ -32,16 +34,24 @@ func (b RAddress) String() string {
 	case RATypeIPv4:
 		raddr = net.IP(b[1 : 1+net.IPv4len])
 	case RATypeDomain:
-		addrs, err := net.LookupIP(string(b[2 : 2+int(b[1])]))
+		name := string(b[2 : 2+int(b[1])])
+
+		// avoid panic: syscall: string with NUL passed to StringToUTF16 on windows.
+		if strings.ContainsRune(name, 0x00) {
+			log.Println("[spec] invalid domain name")
+			return ""
+		}
+
+		// addrs, err := net.LookupIP(string(b[2 : 2+int(b[1])]))
+		addr, err := net.ResolveIPAddr("ip", name)
 		if err != nil {
+			log.Println("[spec]", err.Error())
 			return ""
 		}
 
-		if len(addrs) == 0 {
-			return ""
-		}
+		// raddr = addrs[0]
 
-		raddr = addrs[0]
+		raddr = addr.IP
 	default:
 		raddr = net.IP(b[1 : 1+net.IPv6len])
 	}
@@ -59,7 +69,7 @@ func ResolveRemoteFromBytes(b []byte) (n int, raddr RAddress, err error) {
 		return
 	}
 
-	b = b[n:]
+	// b = b[n:]
 
 	return
 }
@@ -118,10 +128,12 @@ func ResolveRemoteFromReader(r io.Reader) (int, RAddress, error) {
 //ResolveRemoteFromString resolves remote address from s.
 func ResolveRemoteFromString(s string) (int, RAddress, error) {
 	var addr RAddress
+
 	host, port, err := net.SplitHostPort(s)
 	if err != nil {
 		return 0, nil, err
 	}
+
 	if ip := net.ParseIP(host); ip != nil {
 		if ip4 := ip.To4(); ip4 != nil {
 			addr = make([]byte, 1+net.IPv4len+2)

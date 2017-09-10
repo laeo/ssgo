@@ -14,59 +14,61 @@ import (
 	"github.com/doubear/ssgo/spec"
 )
 
+const bufSize = 65536
+
 func relayPacket(c *auth.Credential, cip codec.Cipher, stopCh chan struct{}) {
 	serve, err := net.ListenPacket("udp", fmt.Sprintf(":%s", c.Port))
 	if err != nil {
-		log.Print(err)
+		log.Println("[udp]", err.Error())
 		return
 	}
 
 	serve = codec.PacketConn(serve, cip)
 	nm := newNat()
-	b := make([]byte, 64*1024)
 
-	log.Println("start linsten on udp://", c.Port)
+	log.Println("[udp] start linsten on port", c.Port)
 	for {
 		select {
 		case <-stopCh:
 			break
 		default:
+			b := make([]byte, bufSize)
 			n, addr, err := serve.ReadFrom(b)
 			if err != nil {
-				log.Print(err)
+				log.Println("[udp]", err.Error())
 				continue
 			}
 
-			log.Println("new UDP connection from ", addr.String())
+			log.Println("[udp] new incoming from", addr.String())
 
-			n, s, err := spec.ResolveRemoteFromBytes(b[:n])
+			an, s, err := spec.ResolveRemoteFromBytes(b[:n])
 			if err != nil {
-				log.Print(err)
+				log.Println("[udp]", err.Error())
 				continue
 			}
-
-			payload := b[n:]
 
 			raddr, err := net.ResolveUDPAddr("udp", s.String())
 			if err != nil {
-				log.Print(err)
+				log.Println("[udp]", err.Error())
 				continue
 			}
 
+			log.Println("[udp] decoded target address:", raddr.String())
+
 			pc := nm.Get(addr.String())
 			if pc == nil {
-				pc, err = net.ListenPacket("udp", "")
+				pc, err = net.ListenPacket("udp", "") //新建监听用于接收目标地址的返回数据
 				if err != nil {
-					log.Printf("UDP remote listen error: %v", err)
+					log.Println("[udp] remote listen error:", err.Error())
 					continue
 				}
 
-				nm.Add(raddr, serve, pc, true)
+				nm.Add(addr, serve, pc)
 			}
 
-			_, err = pc.WriteTo(payload, raddr) // accept only UDPAddr despite the signature
+			_, err = pc.WriteTo(b[an:n], raddr) // accept only UDPAddr despite the signature
 			if err != nil {
-				log.Printf("UDP remote write error: %v", err)
+				log.Println("[udp] remote write error:", err.Error())
 				continue
 			}
 		}
@@ -88,11 +90,11 @@ func newNat() *nat {
 	return n
 }
 
-func (n *nat) Add(peer net.Addr, dst, src net.PacketConn, srcIncluded bool) {
+func (n *nat) Add(peer net.Addr, dst, src net.PacketConn) {
 	n.Set(peer.String(), src)
 
 	go func() {
-		timedCopy(dst, peer, src, n.timeout, srcIncluded)
+		timedCopy(dst, peer, src, n.timeout)
 		if pc := n.Del(peer.String()); pc != nil {
 			pc.Close()
 		}
@@ -128,34 +130,33 @@ func (n *nat) Del(k string) (pc net.PacketConn) {
 	return
 }
 
-func timedCopy(dst net.PacketConn, target net.Addr, src net.PacketConn, timeout time.Duration, srcIncluded bool) error {
-	buf := make([]byte, 64*1024)
+func timedCopy(dst net.PacketConn, target net.Addr, src net.PacketConn, timeout time.Duration) error {
+	buf := make([]byte, bufSize)
 
 	for {
 		src.SetReadDeadline(time.Now().Add(timeout))
-		n, raddr, err := src.ReadFrom(buf)
+		n, raddr, err := src.ReadFrom(buf[0:])
 		if err != nil {
+			log.Println("[udp]", err.Error())
 			return err
 		}
 
-		if srcIncluded { // server -> client: add original packet source
-			an, srcAddr, err := spec.ResolveRemoteFromString(raddr.String())
-			if err != nil {
-				return err
-			}
-			copy(buf[an:], buf[:n])
-			copy(buf, srcAddr)
-			_, err = dst.WriteTo(buf[:len(srcAddr)+n], target)
-		} else { // client -> user: strip original packet source
-			an, _, err := spec.ResolveRemoteFromBytes(buf[:n])
-			if err != nil {
-				return err
-			}
-
-			_, err = dst.WriteTo(buf[an:n], target)
+		// server -> client: add original packet source
+		_, srcAddr, err := spec.ResolveRemoteFromString(raddr.String())
+		if err != nil {
+			log.Println("[udp]", err.Error())
+			return err
 		}
 
+		log.Println("[udp] receives response from", raddr.String())
+
+		// copy(buf[:an], srcAddr) //prepend src into buf
+		// copy(buf[an:], buf[:n])
+
+		_, err = dst.WriteTo(append(srcAddr[:], buf[:n]...), target)
+
 		if err != nil {
+			log.Println("[udp]", err.Error())
 			return err
 		}
 	}

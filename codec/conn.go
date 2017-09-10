@@ -2,18 +2,28 @@ package codec
 
 import (
 	"crypto/rand"
+	"errors"
 	"io"
-	"log"
 	"net"
 	"sync"
 )
 
+const (
+	bufSize = 64 * 1024
+)
+
+var (
+	//ErrPacketTooSmall UDP包比IV还短，报错
+	ErrPacketTooSmall = errors.New("[udp] received packet too small")
+)
+
+//Stream TCP数据流包装器结构
 type Stream struct {
 	net.Conn
 	*Codec
 }
 
-//StreamConn makes codec wrapped stream connnection
+//StreamConn 构造自动加密、解密的TCP流链接
 func StreamConn(sc net.Conn, cc *Codec) net.Conn {
 	s := &Stream{
 		sc,
@@ -31,7 +41,7 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 	if n > 0 {
 		b = b[:n]
 
-		log.Printf("%d/%d bytes read before decrypt", n, len(b))
+		// log.Printf("%d/%d bytes read before decrypt", n, len(b))
 
 		s.Decode(b[0:], b)
 	}
@@ -44,13 +54,14 @@ func (s *Stream) Write(p []byte) (n int, err error) {
 	return s.Conn.Write(p)
 }
 
+//Packet UDP数据包包装器结构
 type Packet struct {
 	net.PacketConn
 	Cipher
 	sync.Mutex
 }
 
-//PacketConn makes codec wrapped packet connection
+//PacketConn 构造自动加密、解密的UDP数据包监听
 func PacketConn(pc net.PacketConn, cip Cipher) net.PacketConn {
 	return &Packet{
 		pc,
@@ -59,21 +70,29 @@ func PacketConn(pc net.PacketConn, cip Cipher) net.PacketConn {
 	}
 }
 
+//ReadFrom 封装自动解密实现的UDP数据包读取接口
 func (pc *Packet) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
-	n, addr, err = pc.PacketConn.ReadFrom(b)
+	buf := make([]byte, bufSize)
+	n, addr, err = pc.PacketConn.ReadFrom(buf)
 	if err != nil {
 		return n, addr, err
 	}
 
-	pc.Decrypter(b[:pc.IVSize()]).XORKeyStream(b, b[pc.IVSize():])
+	if n < pc.IVSize() {
+		return 0, nil, ErrPacketTooSmall
+	}
 
-	return len(b), addr, err
+	pc.Decrypter(buf[:pc.IVSize()]).XORKeyStream(b[0:], buf[pc.IVSize():n])
+
+	return n - pc.IVSize(), addr, err
 }
 
+//WriteTo 封装实现自动加密的UDP数据包发送接口
 func (pc *Packet) WriteTo(b []byte, addr net.Addr) (int, error) {
 	pc.Lock()
+	defer pc.Unlock()
 
-	dst := make([]byte, 64*1024)
+	dst := make([]byte, pc.IVSize()+len(b))
 
 	_, err := io.ReadFull(rand.Reader, dst[:pc.IVSize()])
 	if err != nil {
