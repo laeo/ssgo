@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
 
 	"github.com/doubear/ssgo/auth"
 	"github.com/doubear/ssgo/codec"
@@ -18,7 +19,7 @@ func relayStream(c *auth.Credential, cip codec.Cipher, stopCh chan struct{}) {
 		return
 	}
 
-	log.Println("start listen on tcp", c.Port)
+	log.Println("[tcp] start listen on port", c.Port)
 
 	for {
 		select {
@@ -27,18 +28,19 @@ func relayStream(c *auth.Credential, cip codec.Cipher, stopCh chan struct{}) {
 		default:
 			local, err := serve.Accept()
 			if err != nil {
-				log.Print(err)
+				log.Println("[tcp]", err.Error())
 				continue
 			}
 
-			log.Println("accepted stream from ", local.RemoteAddr().String())
+			log.Println("[tcp] new incoming from", local.RemoteAddr().String())
 
 			local.(*net.TCPConn).SetKeepAlive(true)
+			local.(*net.TCPConn).SetNoDelay(true)
 
 			iv := make([]byte, cip.IVSize())
 			_, err = local.Read(iv[:])
 			if err != nil {
-				log.Print(err)
+				log.Println("[tcp]", err.Error())
 				continue
 			}
 
@@ -53,42 +55,40 @@ func handleTCPConn(local net.Conn) {
 
 	_, a, err := spec.ResolveRemoteFromReader(local)
 	if err != nil {
-		log.Print(err)
+		log.Println("[tcp]", err.Error())
 		return
 	}
 
 	target := a.String()
 
-	log.Println("decoded target address: ", target)
+	log.Println("[tcp] decoded target address:", target)
 
 	remote, err := net.Dial("tcp", target)
 	if err != nil {
-		log.Print(err)
+		log.Println("[tcp]", err.Error())
 		return
 	}
 
 	defer remote.Close()
 
-	remote.(*net.TCPConn).SetKeepAlive(true)
+	remote.(*net.TCPConn).SetKeepAlivePeriod(5 * time.Second)
+	remote.(*net.TCPConn).SetNoDelay(true)
 
 	c := make(chan int64)
 
 	go func() {
 		n, err := io.Copy(remote, local)
 		if err != nil {
-			log.Print(err)
+			log.Println("[tcp]", err.Error())
 		}
 
-		log.Println("relay local => remote: ", fmt.Sprintf("%v", n))
 		c <- n
 	}()
 
 	n, err := io.Copy(local, remote)
 	if err != nil {
-		log.Print(err)
+		log.Println("[tcp]", err.Error())
 	}
 
-	log.Println("relay remote => local: ", fmt.Sprintf("%v", n))
-
-	<-c
+	n += <-c
 }

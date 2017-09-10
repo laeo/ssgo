@@ -12,24 +12,23 @@
 
 GET     /api/v1/users => shows detail of all users.
 
-POST    /api/v1/users [port, token, cipher] => create user port.
+POST    /api/v1/users [port, password, method] => create user port.
 
 GET     /api/v1/details => shows server details. [bandwidth,traffic,load]
-
 
 ## 用法
 
 $ curl /api/v1/users
 
-{
-    [
+[
+    {
         "port": 1080,
         "token": "example",
         "cipher": "aes-256-cfb"
-    ]
-}
+    }
+]
 
-$ curl -X post --data '{"port":10080,"token":"example","cipher":"aes-256-cfb"}' /api/v1/users
+$ curl -X post --data '{"port":10080,"password":"example","method":"aes-256-cfb"}' /api/v1/users
 
 {
     "code": 200,

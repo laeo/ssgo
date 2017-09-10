@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -33,6 +34,15 @@ func init() {
 	flag.Parse()
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	logfile, err := os.Create("/var/log/ssgo.log")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	w := io.MultiWriter(logfile, os.Stdout)
+
+	log.SetOutput(w)
 }
 
 func main() {
