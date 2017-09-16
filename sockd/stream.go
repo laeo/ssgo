@@ -5,7 +5,8 @@ import (
 	"io"
 	"log"
 	"net"
-	"time"
+
+	"github.com/go-mango/logy"
 
 	"github.com/doubear/ssgo/auth"
 	"github.com/doubear/ssgo/codec"
@@ -19,7 +20,7 @@ func relayStream(c *auth.Credential, cip codec.Cipher, stopCh chan struct{}) {
 		return
 	}
 
-	log.Println("[tcp] start listen on port", c.Port)
+	logy.I("[tcp] start listen on port %s", c.Port)
 
 	for {
 		select {
@@ -28,19 +29,27 @@ func relayStream(c *auth.Credential, cip codec.Cipher, stopCh chan struct{}) {
 		default:
 			local, err := serve.Accept()
 			if err != nil {
-				log.Println("[tcp]", err.Error())
+				logy.W("[tcp] %s", err.Error())
 				continue
 			}
 
-			log.Println("[tcp] new incoming from", local.RemoteAddr().String())
+			logy.D("[tcp] incoming conn from %s", local.RemoteAddr().String())
 
-			local.(*net.TCPConn).SetKeepAlive(true)
-			local.(*net.TCPConn).SetNoDelay(true)
+			err = local.(*net.TCPConn).SetKeepAlive(true)
+			if err != nil {
+				logy.W("[tcp] setup local keep-alive: %s", err.Error())
+			}
+
+			err = local.(*net.TCPConn).SetNoDelay(true)
+			if err != nil {
+				logy.W("[tcp] setup local no delay: %s", err.Error())
+			}
 
 			iv := make([]byte, cip.IVSize())
 			_, err = local.Read(iv[:])
 			if err != nil {
-				log.Println("[tcp]", err.Error())
+				logy.W("[tcp] read IV occurred %s", err.Error())
+				local.Close()
 				continue
 			}
 
@@ -55,31 +64,38 @@ func handleTCPConn(local net.Conn) {
 
 	_, a, err := spec.ResolveRemoteFromReader(local)
 	if err != nil {
-		log.Println("[tcp]", err.Error())
+		logy.W("[tcp] %s", err.Error())
 		return
 	}
 
 	target := a.String()
 
-	log.Println("[tcp] decoded target address:", target)
+	logy.D("[tcp] decoded remote address:", target)
 
 	remote, err := net.Dial("tcp", target)
 	if err != nil {
-		log.Println("[tcp]", err.Error())
+		logy.W("[tcp] dialling remote occurred %s", err.Error())
 		return
 	}
 
 	defer remote.Close()
 
-	remote.(*net.TCPConn).SetKeepAlivePeriod(5 * time.Second)
-	remote.(*net.TCPConn).SetNoDelay(true)
+	err = remote.(*net.TCPConn).SetKeepAlive(true)
+	if err != nil {
+		logy.W("[tcp] setup remote keep-alive: %s", err.Error())
+	}
+
+	err = remote.(*net.TCPConn).SetNoDelay(true)
+	if err != nil {
+		logy.W("[tcp] setup remote no delay: %s", err.Error())
+	}
 
 	c := make(chan int64)
 
 	go func() {
 		n, err := io.Copy(remote, local)
 		if err != nil {
-			log.Println("[tcp]", err.Error())
+			logy.W("[tcp] relay local => remote occurred %s", err.Error())
 		}
 
 		c <- n
@@ -87,7 +103,7 @@ func handleTCPConn(local net.Conn) {
 
 	n, err := io.Copy(local, remote)
 	if err != nil {
-		log.Println("[tcp]", err.Error())
+		logy.W("[tcp] relay remote => local occurred %s", err.Error())
 	}
 
 	n += <-c

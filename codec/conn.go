@@ -39,11 +39,7 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 	n, err = s.Conn.Read(b)
 
 	if n > 0 {
-		b = b[:n]
-
-		// log.Printf("%d/%d bytes read before decrypt", n, len(b))
-
-		s.Decode(b[0:], b)
+		s.Decode(b[:0], b[:n])
 	}
 
 	return n, err
