@@ -39,7 +39,7 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 	n, err = s.Conn.Read(b)
 
 	if n > 0 {
-		s.Decode(b[:0], b[:n])
+		s.Decode(b, b[:n])
 	}
 
 	return n, err
