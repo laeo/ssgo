@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -9,12 +10,20 @@ import (
 	"strings"
 	"syscall"
 
-	"gopkg.in/mango.v0"
+	"github.com/go-mango/logy"
+
+	"github.com/go-mango/mango"
+	"github.com/go-mango/mango/common"
 
 	"github.com/doubear/ssgo/sockd"
 
 	"github.com/doubear/ssgo/auth"
 	"github.com/doubear/ssgo/event"
+)
+
+var (
+	version string
+	build   string
 )
 
 var flags struct {
@@ -23,29 +32,35 @@ var flags struct {
 	token string
 	sync  string
 	pidof string
+	v     bool
 }
 
 func init() {
-	flag.BoolVar(&flags.d, "d", false, "uses this option to enable daemonize mode. (default: false)")
+	flag.BoolVar(&flags.v, "v", false, "Show build information.")
+	flag.BoolVar(&flags.d, "d", false, "Uses this option to enable daemonize mode. (default: false)")
 	flag.StringVar(&flags.port, "port", "5001", "Web API service port. (default: 5001)")
 	flag.StringVar(&flags.token, "token", "", "Token for access to API.")
 	flag.StringVar(&flags.sync, "sync-from", "", "Sync credentials from given file/url.")
 	flag.StringVar(&flags.pidof, "pid-of", "/var/run/ssgo.pid", "Use custom pid file location. (default: /var/run/ssgo.pid)")
 	flag.Parse()
 
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
 	logfile, err := os.Create("/var/log/ssgo.log")
 	if err != nil {
-		log.Fatal(err)
+		logy.E(err)
 	}
 
 	w := io.MultiWriter(logfile, os.Stdout)
 
-	log.SetOutput(w)
+	logy.SetOutput(w)
 }
 
 func main() {
+	if flags.v {
+		fmt.Println("VERSION:", version)
+		fmt.Println("BUILD:", build)
+		os.Exit(0)
+	}
+
 	if flags.d {
 		args := removeFlagFromArgs(os.Args, "-d")
 		pid, err := syscall.ForkExec(os.Args[0], args, &syscall.ProcAttr{
@@ -57,7 +72,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		log.Println("service run in background and pid is", pid)
+		logy.I("service run in background and pid is %d", pid)
 		os.Exit(0)
 	}
 
@@ -71,17 +86,18 @@ func main() {
 	setupEventHandler()
 
 	m := mango.New()
+
 	m.Group("/api/v1", func(v1 *mango.GroupRouter) {
 
 		//get users list
-		v1.Get("users", func(ctx *mango.Context) (int, interface{}) {
+		v1.Get("users", func(ctx common.Context) (int, interface{}) {
 			return 200, auth.List()
 		})
 
 		//add user
-		v1.Post("users", func(ctx *mango.Context) (int, interface{}) {
+		v1.Post("users", func(ctx common.Context) (int, interface{}) {
 			c := &auth.Credential{}
-			ctx.JSON(c)
+			ctx.Request().JSON(c)
 
 			if c.Test() {
 				if auth.Has(c.Port) {
