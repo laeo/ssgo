@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/go-mango/logy"
 )
 
 const (
@@ -38,14 +39,14 @@ func (b RAddress) String() string {
 
 		// avoid panic: syscall: string with NUL passed to StringToUTF16 on windows.
 		if strings.ContainsRune(name, 0x00) {
-			log.Println("[spec] invalid domain name")
+			logy.W("[spec] invalid domain name")
 			return ""
 		}
 
 		// addrs, err := net.LookupIP(string(b[2 : 2+int(b[1])]))
 		addr, err := net.ResolveIPAddr("ip", name)
 		if err != nil {
-			log.Println("[spec]", err.Error())
+			logy.W("[spec] %s", err.Error())
 			return ""
 		}
 

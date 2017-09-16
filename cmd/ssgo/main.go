@@ -122,13 +122,13 @@ func setupEventHandler() {
 	event.Add("credential.saved", func(p interface{}) {
 		c := p.(*auth.Credential)
 		sockd.Attach(c)
-		log.Println("attached sockd service at ", c.Port)
+		logy.D("attached sockd service at %s", c.Port)
 	})
 
 	event.Add("credential.deleted", func(p interface{}) {
 		c := p.(*auth.Credential)
 		sockd.Detach(c)
-		log.Println("detached sockd service from ", c.Port)
+		logy.D("detached sockd service from %s", c.Port)
 	})
 }
 
