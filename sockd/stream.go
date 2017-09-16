@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
 
 	"github.com/go-mango/logy"
 
@@ -98,6 +99,9 @@ func handleTCPConn(local net.Conn) {
 			logy.W("[tcp] relay local => remote occurred %s", err.Error())
 		}
 
+		local.SetDeadline(time.Now())
+		remote.SetDeadline(time.Now())
+
 		c <- n
 	}()
 
@@ -105,6 +109,9 @@ func handleTCPConn(local net.Conn) {
 	if err != nil {
 		logy.W("[tcp] relay remote => local occurred %s", err.Error())
 	}
+
+	local.SetDeadline(time.Now())
+	remote.SetDeadline(time.Now())
 
 	n += <-c
 }
