@@ -37,7 +37,7 @@ func relayStream(c *auth.Credential, cip codec.Codec, stopCh chan struct{}) {
 			logy.D("[tcp] incoming conn from %s", conn.RemoteAddr().String())
 
 			conn.(*net.TCPConn).SetKeepAlive(true)
-			conn.(*net.TCPConn).SetNoDelay(true)
+			// conn.(*net.TCPConn).SetNoDelay(true)
 
 			sc, err := cip.StreamConn(conn)
 			if err != nil {
@@ -72,7 +72,7 @@ func handleTCPConn(local net.Conn) {
 	defer remote.Close()
 
 	remote.(*net.TCPConn).SetKeepAlive(true)
-	remote.(*net.TCPConn).SetNoDelay(true)
+	// remote.(*net.TCPConn).SetNoDelay(true)
 
 	c := make(chan int64)
 
