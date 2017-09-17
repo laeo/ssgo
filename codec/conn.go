@@ -9,93 +9,124 @@ import (
 )
 
 const (
-	bufSize = 64 * 1024
+	bufSize         = 64 * 1024
+	payloadSizeMask = 0x3FFF // 16*1024 - 1
 )
 
 var (
 	//ErrPacketTooSmall UDP包比IV还短，报错
 	ErrPacketTooSmall = errors.New("[udp] received packet too small")
+
+	_zerononce [128]byte // read-only. 128 bytes is more than enough.
 )
 
-//Stream TCP数据流包装器结构
-type Stream struct {
+type stream struct {
 	net.Conn
-	*Codec
+	Codec
+	r io.Reader
+	w io.Writer
 }
 
-//StreamConn 构造自动加密、解密的TCP流链接
-func StreamConn(sc net.Conn, cc *Codec) net.Conn {
-	s := &Stream{
-		sc,
-		cc,
+func newStreamConn(sc net.Conn, c Codec) (*stream, error) {
+	r, err := newInputStream(sc, c)
+	if err != nil {
+		return nil, err
 	}
 
-	s.Conn.Write(s.eiv)
-
-	return s
-}
-
-func (s *Stream) Read(b []byte) (n int, err error) {
-	n, err = s.Conn.Read(b)
-
-	if n > 0 {
-		s.Decode(b, b[:n])
+	w, err := newOutputStream(sc, c)
+	if err != nil {
+		return nil, err
 	}
 
-	return n, err
+	return &stream{
+		Conn:  sc,
+		Codec: c,
+		r:     r,
+		w:     w,
+	}, nil
 }
 
-func (s *Stream) Write(p []byte) (n int, err error) {
-	s.Encode(p[0:], p)
-	return s.Conn.Write(p)
+func (s *stream) Read(b []byte) (int, error) {
+	return s.r.Read(b)
 }
 
-//Packet UDP数据包包装器结构
-type Packet struct {
+func (s *stream) Write(b []byte) (int, error) {
+	return s.w.Write(b)
+}
+
+type packet struct {
 	net.PacketConn
-	Cipher
+	Codec
 	sync.Mutex
+	buf []byte
 }
 
-//PacketConn 构造自动加密、解密的UDP数据包监听
-func PacketConn(pc net.PacketConn, cip Cipher) net.PacketConn {
-	return &Packet{
-		pc,
-		cip,
-		sync.Mutex{},
-	}
+func newPacketConn(pc net.PacketConn, c Codec) (net.PacketConn, error) {
+	return &packet{
+		PacketConn: pc,
+		Codec:      c,
+		Mutex:      sync.Mutex{},
+		buf:        make([]byte, bufSize),
+	}, nil
 }
 
 //ReadFrom 封装自动解密实现的UDP数据包读取接口
-func (pc *Packet) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
-	buf := make([]byte, bufSize)
-	n, addr, err = pc.PacketConn.ReadFrom(buf)
+func (pc *packet) ReadFrom(b []byte) (int, net.Addr, error) {
+	n, addr, err := pc.PacketConn.ReadFrom(b)
 	if err != nil {
 		return n, addr, err
 	}
 
-	if n < pc.IVSize() {
-		return 0, nil, ErrPacketTooSmall
+	saltSize := pc.SaltSize()
+
+	if n < saltSize {
+		return n, addr, ErrPacketTooSmall
 	}
 
-	pc.Decrypter(buf[:pc.IVSize()]).XORKeyStream(b[0:], buf[pc.IVSize():n])
+	salt := b[:saltSize]
+	aead, err := pc.Decrypter(salt)
+	if err != nil {
+		return n, addr, err
+	}
 
-	return n - pc.IVSize(), addr, err
+	if n < saltSize+aead.Overhead() {
+		return n, addr, ErrPacketTooSmall
+	}
+
+	if saltSize+len(b)+aead.Overhead() < n {
+		return n, addr, io.ErrShortBuffer
+	}
+
+	b, err = aead.Open(b[:0], _zerononce[:aead.NonceSize()], b[saltSize:n], nil)
+
+	return len(b), addr, err
 }
 
 //WriteTo 封装实现自动加密的UDP数据包发送接口
-func (pc *Packet) WriteTo(b []byte, addr net.Addr) (int, error) {
+func (pc *packet) WriteTo(b []byte, addr net.Addr) (int, error) {
 	pc.Lock()
-	defer pc.Unlock()
 
-	dst := make([]byte, pc.IVSize()+len(b))
-
-	_, err := io.ReadFull(rand.Reader, dst[:pc.IVSize()])
+	saltSize := pc.SaltSize()
+	salt := pc.buf[:saltSize]
+	_, err := io.ReadFull(rand.Reader, salt)
 	if err != nil {
 		return 0, err
 	}
 
-	pc.Encrypter(dst[:pc.IVSize()]).XORKeyStream(dst[pc.IVSize():], b)
+	aead, err := pc.Encrypter(salt)
+	if err != nil {
+		return 0, nil
+	}
 
-	return pc.PacketConn.WriteTo(dst, addr)
+	if len(pc.buf) < saltSize+len(b)+aead.Overhead() {
+		return 0, io.ErrShortBuffer
+	}
+
+	bb := aead.Seal(pc.buf[saltSize:saltSize], _zerononce[:aead.NonceSize()], b, nil)
+
+	_, err = pc.PacketConn.WriteTo(pc.buf[:saltSize+len(bb)], addr)
+
+	pc.Unlock()
+
+	return len(b), err
 }
