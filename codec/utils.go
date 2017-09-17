@@ -1,6 +1,12 @@
 package codec
 
-import "crypto/md5"
+import (
+	"crypto/md5"
+	"crypto/sha1"
+	"io"
+
+	"golang.org/x/crypto/hkdf"
+)
 
 // key-derivation function from original Shadowsocks
 func kdf(password string, keyLen int) []byte {
@@ -15,4 +21,21 @@ func kdf(password string, keyLen int) []byte {
 	}
 
 	return b[:keyLen]
+}
+
+func hkdfSHA1(secret, salt, info, outkey []byte) {
+	r := hkdf.New(sha1.New, secret, salt, info)
+	if _, err := io.ReadFull(r, outkey); err != nil {
+		panic(err) // should never happen
+	}
+}
+
+// increment little-endian encoded unsigned integer b. Wrap around on overflow.
+func increment(b []byte) {
+	for i := range b {
+		b[i]++
+		if b[i] != 0 {
+			return
+		}
+	}
 }

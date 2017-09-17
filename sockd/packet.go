@@ -16,14 +16,21 @@ import (
 
 const bufSize = 65536
 
-func relayPacket(c *auth.Credential, cip codec.Cipher, stopCh chan struct{}) {
+func relayPacket(c *auth.Credential, cip codec.Codec, stopCh chan struct{}) {
 	serve, err := net.ListenPacket("udp", fmt.Sprintf(":%s", c.Port))
 	if err != nil {
-		logy.W("[udp] %s", err.Error())
+		logy.W("[udp] net.ListenPacket: %s", err.Error())
 		return
 	}
 
-	serve = codec.PacketConn(serve, cip)
+	defer serve.Close()
+
+	serve, err = cip.PacketConn(serve)
+	if err != nil {
+		logy.W("[udp] codec.PacketConn: %s", err.Error())
+		return
+	}
+
 	nm := newNat()
 
 	logy.I("[udp] start linsten on port %s", c.Port)

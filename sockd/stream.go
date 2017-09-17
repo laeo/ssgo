@@ -14,7 +14,7 @@ import (
 	"github.com/doubear/ssgo/spec"
 )
 
-func relayStream(c *auth.Credential, cip codec.Cipher, stopCh chan struct{}) {
+func relayStream(c *auth.Credential, cip codec.Codec, stopCh chan struct{}) {
 	serve, err := net.Listen("tcp", fmt.Sprintf(":%s", c.Port))
 	if err != nil {
 		log.Print(err)
@@ -28,34 +28,24 @@ func relayStream(c *auth.Credential, cip codec.Cipher, stopCh chan struct{}) {
 		case <-stopCh:
 			break
 		default:
-			local, err := serve.Accept()
+			conn, err := serve.Accept()
 			if err != nil {
 				logy.W("[tcp] %s", err.Error())
 				continue
 			}
 
-			logy.D("[tcp] incoming conn from %s", local.RemoteAddr().String())
+			logy.D("[tcp] incoming conn from %s", conn.RemoteAddr().String())
 
-			err = local.(*net.TCPConn).SetKeepAlive(true)
-			if err != nil {
-				logy.W("[tcp] setup local keep-alive: %s", err.Error())
-			}
+			conn.(*net.TCPConn).SetKeepAlive(true)
+			conn.(*net.TCPConn).SetNoDelay(true)
 
-			err = local.(*net.TCPConn).SetNoDelay(true)
+			sc, err := cip.StreamConn(conn)
 			if err != nil {
-				logy.W("[tcp] setup local no delay: %s", err.Error())
-			}
-
-			iv := make([]byte, cip.IVSize())
-			_, err = local.Read(iv[:])
-			if err != nil {
-				logy.W("[tcp] read IV occurred %s", err.Error())
-				local.Close()
+				logy.W("[tcp] codec.StreamConn occurred: %s", err.Error())
 				continue
 			}
 
-			cc := codec.New(cip, iv)
-			go handleTCPConn(codec.StreamConn(local, cc))
+			go handleTCPConn(sc)
 		}
 	}
 }
@@ -81,15 +71,8 @@ func handleTCPConn(local net.Conn) {
 
 	defer remote.Close()
 
-	err = remote.(*net.TCPConn).SetKeepAlive(true)
-	if err != nil {
-		logy.W("[tcp] setup remote keep-alive: %s", err.Error())
-	}
-
-	err = remote.(*net.TCPConn).SetNoDelay(true)
-	if err != nil {
-		logy.W("[tcp] setup remote no delay: %s", err.Error())
-	}
+	remote.(*net.TCPConn).SetKeepAlive(true)
+	remote.(*net.TCPConn).SetNoDelay(true)
 
 	c := make(chan int64)
 
