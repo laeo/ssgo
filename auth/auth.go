@@ -6,7 +6,6 @@ import "sync"
 type Credential struct {
 	Port   string `json:"port"`
 	Passwd string `json:"password"`
-	Method string `json:"method"`
 }
 
 func (c *Credential) Test() bool {
@@ -15,10 +14,6 @@ func (c *Credential) Test() bool {
 	}
 
 	if c.Passwd == "" {
-		return false
-	}
-
-	if c.Method == "" {
 		return false
 	}
 
