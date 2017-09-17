@@ -1,74 +1,27 @@
 package codec
 
 import (
+	"crypto/aes"
 	"crypto/cipher"
-	"crypto/rand"
-	"errors"
-	"io"
-	"strings"
+	"net"
 )
 
-//统一加密、解密器公共接口
-//秘钥、秘钥长度、初始向量长度
-
-var (
-	//ErrCodecNotFound means not codec found.
-	ErrCodecNotFound = errors.New("codec not found")
-)
-
-var codecs = map[string]struct {
-	KeyLen int
-	New    func(pwd string, keyLen int) (Cipher, error)
-}{
-	"aes-256-cfb": {32, newCFB},
+//Codec 编解码器接口
+type Codec interface {
+	KeySize() int
+	SaltSize() int
+	Encrypter(salt []byte) (cipher.AEAD, error)
+	Decrypter(salt []byte) (cipher.AEAD, error)
+	StreamConn(net.Conn) (net.Conn, error)
+	PacketConn(net.PacketConn) (net.PacketConn, error)
 }
 
-//Resolve resolves codec with a, then initializes it by pwd.
-func Resolve(a string, pwd string) (Cipher, error) {
-	a = strings.ToLower(a)
-
-	if codec, ok := codecs[a]; ok {
-		c, err := codec.New(pwd, codec.KeyLen)
-		if err != nil {
-			return nil, err
-		}
-
-		return c, nil
+//New 创建编解码器
+func New(pwd string) (Codec, error) {
+	key := kdf(pwd, 24) //AES-192-GCM
+	if len(key) != 24 {
+		return nil, aes.KeySizeError(24)
 	}
 
-	return nil, ErrCodecNotFound
-}
-
-type Codec struct {
-	eiv []byte
-	e   cipher.Stream
-
-	div []byte
-	d   cipher.Stream
-}
-
-//New creates new codec instance and auto generate encrypt iv
-func New(c Cipher, iv []byte) *Codec {
-	cc := &Codec{}
-
-	b := make([]byte, c.IVSize())
-	io.ReadFull(rand.Reader, b)
-
-	cc.eiv = b
-	cc.e = c.Encrypter(cc.eiv)
-
-	cc.div = iv
-	cc.d = c.Decrypter(cc.div)
-
-	return cc
-}
-
-//Encode is facade of encrypter XORKeyStream
-func (c *Codec) Encode(dst, src []byte) {
-	c.e.XORKeyStream(dst, src)
-}
-
-//Decode is facade of decrypter XORKeyStream
-func (c *Codec) Decode(dst, src []byte) {
-	c.d.XORKeyStream(dst, src)
+	return newGCM(key)
 }

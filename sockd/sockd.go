@@ -29,7 +29,7 @@ func Attach(c *auth.Credential) {
 	s.Unlock()
 
 	//start handlers
-	cip, err := codec.Resolve(c.Method, c.Passwd)
+	cip, err := codec.New(c.Passwd)
 	if err != nil {
 		log.Print(err)
 		return
