@@ -97,7 +97,7 @@ func (pc *packet) ReadFrom(b []byte) (int, net.Addr, error) {
 		return n, addr, io.ErrShortBuffer
 	}
 
-	b, err = aead.Open(b[:0], _zerononce[:aead.NonceSize()], b[:n], nil)
+	b, err = aead.Open(b[:0], _zerononce[:aead.NonceSize()], b[saltSize:n], nil)
 
 	return len(b), addr, err
 }
