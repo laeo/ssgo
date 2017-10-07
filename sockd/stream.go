@@ -36,9 +36,6 @@ func relayStream(c *auth.Credential, cip codec.Codec, stopCh chan struct{}) {
 
 			logy.D("[tcp] incoming conn from %s", conn.RemoteAddr().String())
 
-			conn.(*net.TCPConn).SetKeepAlive(true)
-			// conn.(*net.TCPConn).SetNoDelay(true)
-
 			sc, err := cip.StreamConn(conn)
 			if err != nil {
 				logy.W("[tcp] codec.StreamConn occurred: %s", err.Error())
@@ -51,7 +48,13 @@ func relayStream(c *auth.Credential, cip codec.Codec, stopCh chan struct{}) {
 }
 
 func handleTCPConn(local net.Conn) {
-	defer local.Close()
+	defer func() {
+		local.Close()
+		logy.D("[tcp] local conn closed %v", local.RemoteAddr())
+	}()
+
+	// local.(*net.TCPConn).SetKeepAlive(true)
+	// local.(*net.TCPConn).SetLinger(0)
 
 	_, a, err := spec.ResolveRemoteFromReader(local)
 	if err != nil {
@@ -69,10 +72,13 @@ func handleTCPConn(local net.Conn) {
 		return
 	}
 
-	defer remote.Close()
+	defer func() {
+		remote.Close()
+		logy.D("[tcp] remote conn closed %v", remote.RemoteAddr())
+	}()
 
-	remote.(*net.TCPConn).SetKeepAlive(true)
-	// remote.(*net.TCPConn).SetNoDelay(true)
+	// remote.(*net.TCPConn).SetKeepAlive(true)
+	// remote.(*net.TCPConn).SetLinger(0)
 
 	c := make(chan int64)
 

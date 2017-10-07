@@ -6,14 +6,12 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/go-mango/logy"
-
-	"github.com/go-mango/mango"
-	"github.com/go-mango/mango/common"
 
 	"github.com/doubear/ssgo/sockd"
 
@@ -85,34 +83,14 @@ func main() {
 
 	setupEventHandler()
 
-	m := mango.New()
-
-	m.Group("/api/v1", func(v1 *mango.GroupRouter) {
-
-		//get users list
-		v1.Get("users", func(ctx common.Context) (int, interface{}) {
-			return 200, auth.List()
-		})
-
-		//add user
-		v1.Post("users", func(ctx common.Context) (int, interface{}) {
-			c := &auth.Credential{}
-			ctx.Request().JSON(c)
-
-			if c.Test() {
-				if auth.Has(c.Port) {
-					return 409, nil
-				}
-
-				auth.Add(c)
-				return 200, c
-			}
-
-			return 409, nil
-		})
+	auth.Add(&auth.Credential{
+		Port:   "10001",
+		Passwd: "qwert",
 	})
 
-	m.Start(":5001")
+	sig := make(chan os.Signal)
+	signal.Notify(sig, os.Interrupt, os.Kill)
+	<-sig
 
 	pid.Close()
 	os.Remove(flags.pidof)
