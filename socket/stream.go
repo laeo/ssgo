@@ -1,4 +1,4 @@
-package sockd
+package socket
 
 import (
 	"fmt"
@@ -7,21 +7,55 @@ import (
 	"net"
 	"time"
 
+	"github.com/doubear/ssgo/crypto"
+
 	"github.com/go-mango/logy"
 
-	"github.com/doubear/ssgo/auth"
-	"github.com/doubear/ssgo/codec"
 	"github.com/doubear/ssgo/spec"
 )
 
-func relayStream(c *auth.Credential, cip codec.Codec, stopCh chan struct{}) {
-	serve, err := net.Listen("tcp", fmt.Sprintf(":%s", c.Port))
+type stream struct {
+	net.Conn
+	crypto.Crypto
+	r io.Reader
+	w io.Writer
+}
+
+func NewStreamConn(sc net.Conn, c crypto.Crypto) (*stream, error) {
+	r, err := newInputStream(sc, c)
+	if err != nil {
+		return nil, err
+	}
+
+	w, err := newOutputStream(sc, c)
+	if err != nil {
+		return nil, err
+	}
+
+	return &stream{
+		Conn:   sc,
+		Crypto: c,
+		r:      r,
+		w:      w,
+	}, nil
+}
+
+func (s *stream) Read(b []byte) (int, error) {
+	return s.r.Read(b)
+}
+
+func (s *stream) Write(b []byte) (int, error) {
+	return s.w.Write(b)
+}
+
+func RelayStream(p string, cip crypto.Crypto, stopCh chan struct{}) {
+	serve, err := net.Listen("tcp", fmt.Sprintf(":%s", p))
 	if err != nil {
 		log.Print(err)
 		return
 	}
 
-	logy.I("[tcp] start listen on port %s", c.Port)
+	logy.I("[tcp] start listen on port %s", p)
 
 	for {
 		select {
@@ -36,7 +70,10 @@ func relayStream(c *auth.Credential, cip codec.Codec, stopCh chan struct{}) {
 
 			logy.D("[tcp] incoming conn from %s", conn.RemoteAddr().String())
 
-			sc, err := cip.StreamConn(conn)
+			conn.(*net.TCPConn).SetKeepAlive(true)
+			// conn.(*net.TCPConn).SetLinger(0)
+
+			sc, err := NewStreamConn(conn, cip)
 			if err != nil {
 				logy.W("[tcp] codec.StreamConn occurred: %s", err.Error())
 				continue
@@ -52,9 +89,6 @@ func handleTCPConn(local net.Conn) {
 		local.Close()
 		logy.D("[tcp] local conn closed %v", local.RemoteAddr())
 	}()
-
-	// local.(*net.TCPConn).SetKeepAlive(true)
-	// local.(*net.TCPConn).SetLinger(0)
 
 	_, a, err := spec.ResolveRemoteFromReader(local)
 	if err != nil {
@@ -77,7 +111,7 @@ func handleTCPConn(local net.Conn) {
 		logy.D("[tcp] remote conn closed %v", remote.RemoteAddr())
 	}()
 
-	// remote.(*net.TCPConn).SetKeepAlive(true)
+	remote.(*net.TCPConn).SetKeepAlive(true)
 	// remote.(*net.TCPConn).SetLinger(0)
 
 	c := make(chan int64)

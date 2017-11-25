@@ -1,23 +1,110 @@
-package sockd
+package socket
 
 import (
+	"crypto/rand"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/doubear/ssgo/codec"
+	"github.com/doubear/ssgo/crypto"
 	"github.com/go-mango/logy"
-
-	"github.com/doubear/ssgo/auth"
 
 	"github.com/doubear/ssgo/spec"
 )
 
-const bufSize = 65536
+const (
+	bufSize = 64 * 1024
+)
 
-func relayPacket(c *auth.Credential, cip codec.Codec, stopCh chan struct{}) {
-	serve, err := net.ListenPacket("udp", fmt.Sprintf(":%s", c.Port))
+var (
+	//ErrPacketTooSmall UDP包比IV还短，报错
+	ErrPacketTooSmall = errors.New("[udp] received packet too small")
+
+	_zerononce [128]byte // read-only. 128 bytes is more than enough.
+)
+
+type packet struct {
+	net.PacketConn
+	crypto.Crypto
+	sync.Mutex
+	buf []byte
+}
+
+func NewPacketConn(pc net.PacketConn, c crypto.Crypto) (net.PacketConn, error) {
+	return &packet{
+		PacketConn: pc,
+		Crypto:     c,
+		Mutex:      sync.Mutex{},
+		buf:        make([]byte, bufSize),
+	}, nil
+}
+
+//ReadFrom 封装自动解密实现的UDP数据包读取接口
+func (pc *packet) ReadFrom(b []byte) (int, net.Addr, error) {
+	n, addr, err := pc.PacketConn.ReadFrom(b)
+	if err != nil {
+		return n, addr, err
+	}
+
+	saltSize := pc.SaltSize()
+
+	if n < saltSize {
+		return n, addr, ErrPacketTooSmall
+	}
+
+	salt := b[:saltSize]
+	aead, err := pc.Decrypter(salt)
+	if err != nil {
+		return n, addr, err
+	}
+
+	if n < saltSize+aead.Overhead() {
+		return n, addr, ErrPacketTooSmall
+	}
+
+	if saltSize+len(b)+aead.Overhead() < n {
+		return n, addr, io.ErrShortBuffer
+	}
+
+	b, err = aead.Open(b[:0], _zerononce[:aead.NonceSize()], b[saltSize:n], nil)
+
+	return len(b), addr, err
+}
+
+//WriteTo 封装实现自动加密的UDP数据包发送接口
+func (pc *packet) WriteTo(b []byte, addr net.Addr) (int, error) {
+	pc.Lock()
+
+	saltSize := pc.SaltSize()
+	salt := pc.buf[:saltSize]
+	_, err := io.ReadFull(rand.Reader, salt)
+	if err != nil {
+		return 0, err
+	}
+
+	aead, err := pc.Encrypter(salt)
+	if err != nil {
+		return 0, nil
+	}
+
+	if len(pc.buf) < saltSize+len(b)+aead.Overhead() {
+		return 0, io.ErrShortBuffer
+	}
+
+	bb := aead.Seal(pc.buf[saltSize:saltSize], _zerononce[:aead.NonceSize()], b, nil)
+
+	_, err = pc.PacketConn.WriteTo(pc.buf[:saltSize+len(bb)], addr)
+
+	pc.Unlock()
+
+	return len(b), err
+}
+
+func RelayPacket(p string, cip crypto.Crypto, stopCh chan struct{}) {
+	serve, err := net.ListenPacket("udp", fmt.Sprintf(":%s", p))
 	if err != nil {
 		logy.W("[udp] net.ListenPacket: %s", err.Error())
 		return
@@ -25,7 +112,8 @@ func relayPacket(c *auth.Credential, cip codec.Codec, stopCh chan struct{}) {
 
 	defer serve.Close()
 
-	serve, err = cip.PacketConn(serve)
+	// serve, err = cip.PacketConn(serve)
+	serve, err = NewPacketConn(serve, cip)
 	if err != nil {
 		logy.W("[udp] codec.PacketConn: %s", err.Error())
 		return
@@ -33,7 +121,7 @@ func relayPacket(c *auth.Credential, cip codec.Codec, stopCh chan struct{}) {
 
 	nm := newNat()
 
-	logy.I("[udp] start linsten on port %s", c.Port)
+	logy.I("[udp] start linsten on port %s", p)
 	for {
 		select {
 		case <-stopCh:

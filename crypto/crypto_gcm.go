@@ -1,9 +1,13 @@
-package codec
+package crypto
 
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"net"
+	"crypto/md5"
+	"crypto/sha1"
+	"io"
+
+	"golang.org/x/crypto/hkdf"
 )
 
 type gcm struct {
@@ -20,7 +24,7 @@ func gcmFactory(key []byte) (cipher.AEAD, error) {
 	return cipher.NewGCMWithNonceSize(blk, 12)
 }
 
-func newGCM(psk []byte) (Codec, error) {
+func NewGCM(psk []byte) (Crypto, error) {
 	if len(psk) != 24 {
 		return nil, aes.KeySizeError(24)
 	}
@@ -54,10 +58,32 @@ func (g *gcm) Decrypter(salt []byte) (cipher.AEAD, error) {
 	return g.factory(subkey)
 }
 
-func (g *gcm) StreamConn(sc net.Conn) (net.Conn, error) {
-	return newStreamConn(sc, g)
+// func (g *gcm) StreamConn(sc net.Conn) (net.Conn, error) {
+// 	return socket.NewStreamConn(sc, g)
+// }
+
+// func (g *gcm) PacketConn(pc net.PacketConn) (net.PacketConn, error) {
+// 	return socket.NewPacketConn(pc, g)
+// }
+
+// key-derivation function from original Shadowsocks
+func kdf(password string, keyLen int) []byte {
+	var b, prev []byte
+	h := md5.New()
+	for len(b) < keyLen {
+		h.Write(prev)
+		h.Write([]byte(password))
+		b = h.Sum(b)
+		prev = b[len(b)-h.Size():]
+		h.Reset()
+	}
+
+	return b[:keyLen]
 }
 
-func (g *gcm) PacketConn(pc net.PacketConn) (net.PacketConn, error) {
-	return newPacketConn(pc, g)
+func hkdfSHA1(secret, salt, info, outkey []byte) {
+	r := hkdf.New(sha1.New, secret, salt, info)
+	if _, err := io.ReadFull(r, outkey); err != nil {
+		panic(err) // should never happen
+	}
 }

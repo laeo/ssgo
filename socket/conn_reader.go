@@ -1,9 +1,13 @@
-package codec
+package socket
 
 import (
 	"crypto/cipher"
 	"io"
+
+	"github.com/doubear/ssgo/crypto"
 )
+
+const payloadSizeMask = 0x3FFF // 16*1024 - 1
 
 type inputStream struct {
 	r io.Reader
@@ -13,7 +17,7 @@ type inputStream struct {
 	leftover []byte
 }
 
-func newInputStream(r io.Reader, c Codec) (io.Reader, error) {
+func newInputStream(r io.Reader, c crypto.Crypto) (io.Reader, error) {
 	salt := make([]byte, c.SaltSize())
 	_, err := io.ReadFull(r, salt)
 	if err != nil {
