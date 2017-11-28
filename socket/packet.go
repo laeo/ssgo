@@ -106,7 +106,7 @@ func (pc *packet) WriteTo(b []byte, addr net.Addr) (int, error) {
 func RelayPacket(p string, cip crypto.Crypto, stopCh chan struct{}) {
 	serve, err := net.ListenPacket("udp", fmt.Sprintf(":%s", p))
 	if err != nil {
-		logy.W("[udp] net.ListenPacket: %s", err.Error())
+		logy.W("[udp] net.ListenPacket:", err.Error())
 		return
 	}
 
@@ -115,13 +115,13 @@ func RelayPacket(p string, cip crypto.Crypto, stopCh chan struct{}) {
 	// serve, err = cip.PacketConn(serve)
 	serve, err = NewPacketConn(serve, cip)
 	if err != nil {
-		logy.W("[udp] codec.PacketConn: %s", err.Error())
+		logy.W("[udp] codec.PacketConn:", err.Error())
 		return
 	}
 
 	nm := newNat()
 
-	logy.I("[udp] start linsten on port %s", p)
+	logy.I("[udp] start linsten on port", p)
 	for {
 		select {
 		case <-stopCh:
@@ -130,31 +130,31 @@ func RelayPacket(p string, cip crypto.Crypto, stopCh chan struct{}) {
 			b := make([]byte, bufSize)
 			n, addr, err := serve.ReadFrom(b)
 			if err != nil {
-				logy.W("[udp] %s", err.Error())
+				logy.W("[udp]", err.Error())
 				continue
 			}
 
-			logy.D("[udp] incoming packet from %s", addr.String())
+			logy.D("[udp] incoming packet from", addr.String())
 
 			an, s, err := spec.ResolveRemoteFromBytes(b[:n])
 			if err != nil {
-				logy.W("[udp] %s", err.Error())
+				logy.W("[udp]", err.Error())
 				continue
 			}
 
 			raddr, err := net.ResolveUDPAddr("udp", s.String())
 			if err != nil {
-				logy.W("[udp] %s", err.Error())
+				logy.W("[udp]", err.Error())
 				continue
 			}
 
-			logy.D("[udp] decoded remote address: %s", raddr.String())
+			logy.D("[udp] decoded remote address:", raddr.String())
 
 			pc := nm.Get(addr.String())
 			if pc == nil {
 				pc, err = net.ListenPacket("udp", "") //新建监听用于接收目标地址的返回数据
 				if err != nil {
-					logy.W("[udp] remote listen error: %s", err.Error())
+					logy.W("[udp] remote listen error:", err.Error())
 					continue
 				}
 
@@ -163,7 +163,7 @@ func RelayPacket(p string, cip crypto.Crypto, stopCh chan struct{}) {
 
 			_, err = pc.WriteTo(b[an:n], raddr) // accept only UDPAddr despite the signature
 			if err != nil {
-				logy.W("[udp] remote write error: %s", err.Error())
+				logy.W("[udp] remote write error:", err.Error())
 				continue
 			}
 		}
@@ -238,18 +238,18 @@ func timedCopy(dst net.PacketConn, target net.Addr, src net.PacketConn, timeout 
 				}
 			}
 
-			logy.W("[udp] %s", err.Error())
+			logy.W("[udp]", err.Error())
 			return err
 		}
 
 		// server -> client: add original packet source
 		_, srcAddr, err := spec.ResolveRemoteFromString(raddr.String())
 		if err != nil {
-			logy.W("[udp] %s", err.Error())
+			logy.W("[udp]", err.Error())
 			return err
 		}
 
-		logy.D("[udp] receives response from %s", raddr.String())
+		logy.D("[udp] receives response from", raddr.String())
 
 		_, err = dst.WriteTo(append(srcAddr[:], buf[:n]...), target)
 
@@ -260,7 +260,7 @@ func timedCopy(dst net.PacketConn, target net.Addr, src net.PacketConn, timeout 
 				}
 			}
 
-			logy.W("[udp] %s", err.Error())
+			logy.W("[udp]", err.Error())
 			return err
 		}
 	}
