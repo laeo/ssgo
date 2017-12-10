@@ -1,6 +1,7 @@
 package socket
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -103,7 +104,7 @@ func (pc *packet) WriteTo(b []byte, addr net.Addr) (int, error) {
 	return len(b), err
 }
 
-func RelayPacket(p string, cip crypto.Crypto, stopCh chan struct{}) {
+func RelayPacket(p string, cip crypto.Crypto, ctx context.Context) {
 	serve, err := net.ListenPacket("udp", fmt.Sprintf(":%s", p))
 	if err != nil {
 		logy.W("[udp] net.ListenPacket:", err.Error())
@@ -124,7 +125,7 @@ func RelayPacket(p string, cip crypto.Crypto, stopCh chan struct{}) {
 	logy.I("[udp] start linsten on port", p)
 	for {
 		select {
-		case <-stopCh:
+		case <-ctx.Done():
 			break
 		default:
 			b := make([]byte, bufSize)

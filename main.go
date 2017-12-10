@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -56,17 +57,19 @@ func main() {
 		os.Exit(0)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	cip, err := crypto.New("qwert")
 	if err != nil {
 		logy.E(err.Error())
 	}
 
-	stopCh := make(chan struct{})
-	go socket.RelayStream("10001", cip, stopCh)
-	go socket.RelayPacket("10001", cip, stopCh)
+	go socket.RelayStream("10001", cip, ctx)
+	go socket.RelayPacket("10001", cip, ctx)
 
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt, os.Kill)
 	<-sig
-	close(stopCh)
+
+	cancel()
 }

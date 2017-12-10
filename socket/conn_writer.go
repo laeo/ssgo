@@ -57,6 +57,7 @@ func (w *outputStream) ReadFrom(r io.Reader) (n int64, err error) {
 			buf = buf[:2+w.Overhead()+nr+w.Overhead()]
 			payloadBuf = payloadBuf[:nr]
 			buf[0], buf[1] = byte(nr>>8), byte(nr) // big-endian payload size
+
 			w.Seal(buf[:0], w.nonce, buf[:2], nil)
 			increment(w.nonce)
 

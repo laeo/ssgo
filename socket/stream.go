@@ -1,6 +1,7 @@
 package socket
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -48,7 +49,7 @@ func (s *stream) Write(b []byte) (int, error) {
 	return s.w.Write(b)
 }
 
-func RelayStream(p string, cip crypto.Crypto, stopCh chan struct{}) {
+func RelayStream(p string, cip crypto.Crypto, ctx context.Context) {
 	serve, err := net.Listen("tcp", fmt.Sprintf(":%s", p))
 	if err != nil {
 		log.Print(err)
@@ -59,7 +60,7 @@ func RelayStream(p string, cip crypto.Crypto, stopCh chan struct{}) {
 
 	for {
 		select {
-		case <-stopCh:
+		case <-ctx.Done():
 			break
 		default:
 			conn, err := serve.Accept()
@@ -75,6 +76,7 @@ func RelayStream(p string, cip crypto.Crypto, stopCh chan struct{}) {
 			sc, err := NewStreamConn(conn, cip)
 			if err != nil {
 				logy.W("[tcp] codec.StreamConn occurred:", err.Error())
+				conn.Close()
 				continue
 			}
 
