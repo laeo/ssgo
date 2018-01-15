@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"time"
 
 	"github.com/doubear/ssgo/crypto"
 
@@ -22,7 +21,8 @@ type stream struct {
 	w io.Writer
 }
 
-func NewStreamConn(sc net.Conn, c crypto.Crypto) (*stream, error) {
+//NewStreamConn 创建流加密连接
+func NewStreamConn(sc net.Conn, c crypto.Crypto) (net.Conn, error) {
 	r, err := newInputStream(sc, c)
 	if err != nil {
 		return nil, err
@@ -49,7 +49,8 @@ func (s *stream) Write(b []byte) (int, error) {
 	return s.w.Write(b)
 }
 
-func RelayStream(p string, cip crypto.Crypto, ctx context.Context) {
+//RelayStream 转发TCP数据包
+func RelayStream(ctx context.Context, p string, cip crypto.Crypto) {
 	serve, err := net.Listen("tcp", fmt.Sprintf(":%s", p))
 	if err != nil {
 		log.Print(err)
@@ -120,8 +121,8 @@ func handleTCPConn(local net.Conn) {
 			logy.W("[tcp] relay local => remote occurred", err.Error())
 		}
 
-		local.SetDeadline(time.Now())
-		remote.SetDeadline(time.Now())
+		// local.SetDeadline(time.Now().Add(10 * time.Second))
+		// remote.SetDeadline(time.Now().Add(10 * time.Second))
 	}()
 
 	_, err = io.Copy(local, remote)
@@ -129,6 +130,6 @@ func handleTCPConn(local net.Conn) {
 		logy.W("[tcp] relay remote => local occurred", err.Error())
 	}
 
-	local.SetDeadline(time.Now())
-	remote.SetDeadline(time.Now())
+	// local.SetDeadline(time.Now().Add(10 * time.Second))
+	// remote.SetDeadline(time.Now().Add(10 * time.Second))
 }

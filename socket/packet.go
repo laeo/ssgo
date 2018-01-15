@@ -34,6 +34,7 @@ type packet struct {
 	buf []byte
 }
 
+//NewPacketConn 创建包加密连接
 func NewPacketConn(pc net.PacketConn, c crypto.Crypto) (net.PacketConn, error) {
 	return &packet{
 		PacketConn: pc,
@@ -104,7 +105,8 @@ func (pc *packet) WriteTo(b []byte, addr net.Addr) (int, error) {
 	return len(b), err
 }
 
-func RelayPacket(p string, cip crypto.Crypto, ctx context.Context) {
+//RelayPacket 转发UDP数据包
+func RelayPacket(ctx context.Context, p string, cip crypto.Crypto) {
 	serve, err := net.ListenPacket("udp", fmt.Sprintf(":%s", p))
 	if err != nil {
 		logy.W("[udp] net.ListenPacket:", err.Error())
