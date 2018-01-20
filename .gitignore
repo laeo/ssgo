@@ -1,1 +1,2 @@
-bin/ssgo
+/vendor
+/build

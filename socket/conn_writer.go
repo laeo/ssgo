@@ -1,10 +1,12 @@
-package codec
+package socket
 
 import (
 	"bytes"
 	"crypto/cipher"
 	"crypto/rand"
 	"io"
+
+	"github.com/doubear/ssgo/crypto"
 )
 
 type outputStream struct {
@@ -14,7 +16,7 @@ type outputStream struct {
 	buf   []byte
 }
 
-func newOutputStream(w io.Writer, c Codec) (io.Writer, error) {
+func newOutputStream(w io.Writer, c crypto.Crypto) (io.Writer, error) {
 	salt := make([]byte, c.SaltSize())
 	_, err := io.ReadFull(rand.Reader, salt)
 	if err != nil {
@@ -55,6 +57,7 @@ func (w *outputStream) ReadFrom(r io.Reader) (n int64, err error) {
 			buf = buf[:2+w.Overhead()+nr+w.Overhead()]
 			payloadBuf = payloadBuf[:nr]
 			buf[0], buf[1] = byte(nr>>8), byte(nr) // big-endian payload size
+
 			w.Seal(buf[:0], w.nonce, buf[:2], nil)
 			increment(w.nonce)
 
@@ -77,4 +80,14 @@ func (w *outputStream) ReadFrom(r io.Reader) (n int64, err error) {
 	}
 
 	return n, err
+}
+
+// increment little-endian encoded unsigned integer b. Wrap around on overflow.
+func increment(b []byte) {
+	for i := range b {
+		b[i]++
+		if b[i] != 0 {
+			return
+		}
+	}
 }

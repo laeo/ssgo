@@ -46,7 +46,7 @@ func (b RAddress) String() string {
 		// addrs, err := net.LookupIP(string(b[2 : 2+int(b[1])]))
 		addr, err := net.ResolveIPAddr("ip", name)
 		if err != nil {
-			logy.W("[spec] %s", err.Error())
+			logy.W("[spec]", err.Error())
 			return ""
 		}
 

@@ -1,7 +1,7 @@
 .PHONY: test release clean
 
-SRC=cmd/ssgo/main.go
-BIN=bin/ssgo
+SRC=main.go
+BIN=build/ssgo
 VERSION=`git rev-parse HEAD | cut -c1-6`
 BUILD=`date -u +%FT%T%z`
 
