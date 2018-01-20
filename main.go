@@ -64,8 +64,8 @@ func main() {
 		logy.E(err.Error())
 	}
 
-	go socket.RelayStream("10001", cip, ctx)
-	go socket.RelayPacket("10001", cip, ctx)
+	go socket.RelayStream(ctx, "10001", cip)
+	go socket.RelayPacket(ctx, "10001", cip)
 
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt, os.Kill)

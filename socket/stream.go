@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
 
 	"github.com/doubear/ssgo/crypto"
 
@@ -121,8 +122,8 @@ func handleTCPConn(local net.Conn) {
 			logy.W("[tcp] relay local => remote occurred", err.Error())
 		}
 
-		// local.SetDeadline(time.Now().Add(10 * time.Second))
-		// remote.SetDeadline(time.Now().Add(10 * time.Second))
+		local.SetDeadline(time.Now())
+		remote.SetDeadline(time.Now())
 	}()
 
 	_, err = io.Copy(local, remote)
@@ -130,6 +131,6 @@ func handleTCPConn(local net.Conn) {
 		logy.W("[tcp] relay remote => local occurred", err.Error())
 	}
 
-	// local.SetDeadline(time.Now().Add(10 * time.Second))
-	// remote.SetDeadline(time.Now().Add(10 * time.Second))
+	local.SetDeadline(time.Now())
+	remote.SetDeadline(time.Now())
 }
