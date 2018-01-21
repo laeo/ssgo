@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/doubear/ssgo/crypto"
+	"github.com/SspieTeam/ssgo/crypto"
 	"github.com/go-mango/logy"
 
-	"github.com/doubear/ssgo/spec"
+	"github.com/SspieTeam/ssgo/spec"
 )
 
 const (

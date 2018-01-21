@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"io"
 
-	"github.com/doubear/ssgo/crypto"
+	"github.com/SspieTeam/ssgo/crypto"
 )
 
 type outputStream struct {

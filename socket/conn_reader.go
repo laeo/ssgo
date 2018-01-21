@@ -4,7 +4,7 @@ import (
 	"crypto/cipher"
 	"io"
 
-	"github.com/doubear/ssgo/crypto"
+	"github.com/SspieTeam/ssgo/crypto"
 )
 
 const payloadSizeMask = 0x3FFF // 16*1024 - 1

@@ -9,9 +9,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/doubear/ssgo/socket"
+	"github.com/SspieTeam/ssgo/socket"
 
-	"github.com/doubear/ssgo/crypto"
+	"github.com/SspieTeam/ssgo/crypto"
 
 	"github.com/go-mango/logy"
 )
