@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"context"
 	"flag"
 	"fmt"
@@ -24,11 +25,15 @@ var (
 var opt struct {
 	d bool
 	v bool
+	p int
+	k string
 }
 
 func init() {
 	flag.BoolVar(&opt.v, "v", false, "Show build information.")
-	flag.BoolVar(&opt.d, "d", false, "Uses this option to enable daemonize mode. (default: false)")
+	flag.BoolVar(&opt.d, "d", false, "Enable daemonize mode.")
+	flag.IntVar(&opt.p, "p", 10001, "Port number for client connect.")
+	flag.StringVar(&opt.k, "k", "secrets", "Password for authentication.")
 	flag.Parse()
 
 	logy.SetOutput(os.Stdout)
@@ -59,13 +64,13 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	cip, err := crypto.New("qwert")
+	cip, err := crypto.New(opt.k)
 	if err != nil {
 		logy.E(err.Error())
 	}
 
-	go socket.RelayStream(ctx, "10001", cip)
-	go socket.RelayPacket(ctx, "10001", cip)
+	go socket.RelayStream(ctx, strconv.Itoa(opt.p), cip)
+	go socket.RelayPacket(ctx, strconv.Itoa(opt.p), cip)
 
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt, os.Kill)
