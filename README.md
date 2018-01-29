@@ -10,15 +10,15 @@
 
 ## 接口设计
 
-GET     /api/v1/users => shows detail of all users.
+GET     /api/v1/ports => shows detail of all ports.
 
-POST    /api/v1/users [port, password, method] => create user port.
+POST    /api/v1/ports [port, password, method] => create user port.
 
 GET     /api/v1/details => shows server details. [bandwidth,traffic,load]
 
 ## 用法
 
-$ curl /api/v1/users
+$ curl /api/v1/ports
 
 [
     {
@@ -28,7 +28,7 @@ $ curl /api/v1/users
     }
 ]
 
-$ curl -X post --data '{"port":10080,"password":"example","method":"aes-256-cfb"}' /api/v1/users
+$ curl -X post --data '{"port":10080,"password":"example","method":"aes-256-cfb"}' /api/v1/ports
 
 {
     "code": 200,

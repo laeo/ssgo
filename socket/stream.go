@@ -90,7 +90,7 @@ func RelayStream(ctx context.Context, p string, cip crypto.Crypto) {
 func handleTCPConn(local net.Conn) {
 	defer func() {
 		local.Close()
-		logy.DD("[tcp] local conn closed", local.RemoteAddr())
+		logy.D("[tcp] local conn closed", local.RemoteAddr().String())
 	}()
 
 	_, a, err := spec.ResolveRemoteFromReader(local)
@@ -111,7 +111,7 @@ func handleTCPConn(local net.Conn) {
 
 	defer func() {
 		remote.Close()
-		logy.DD("[tcp] remote conn closed", remote.RemoteAddr())
+		logy.D("[tcp] remote conn closed", remote.RemoteAddr().String())
 	}()
 
 	remote.(*net.TCPConn).SetKeepAlive(true)
@@ -119,7 +119,9 @@ func handleTCPConn(local net.Conn) {
 	go func() {
 		_, err := io.Copy(remote, local)
 		if err != nil {
-			logy.W("[tcp] relay local => remote occurred", err.Error())
+			if err, ok := err.(net.Error); !ok || !err.Timeout() {
+				logy.W("[tcp] relay local => remote occurred", err.Error())
+			}
 		}
 
 		local.SetDeadline(time.Now())
@@ -128,7 +130,9 @@ func handleTCPConn(local net.Conn) {
 
 	_, err = io.Copy(local, remote)
 	if err != nil {
-		logy.W("[tcp] relay remote => local occurred", err.Error())
+		if err, ok := err.(net.Error); !ok || !err.Timeout() {
+			logy.W("[tcp] relay remote => local occurred", err.Error())
+		}
 	}
 
 	local.SetDeadline(time.Now())
