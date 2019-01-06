@@ -90,8 +90,10 @@ func RelayStream(ctx context.Context, p string, cip crypto.Crypto) {
 
 func handleTCPConn(local net.Conn) {
 	defer func() {
-		local.Close()
-		tcp.Debug("Local connection closed", local.RemoteAddr().String())
+		err := local.Close()
+		if err != nil {
+			tcp.Warn("Close local connection:", err.Error())
+		}
 	}()
 
 	_, a, err := spec.ResolveRemoteFromReader(local)
