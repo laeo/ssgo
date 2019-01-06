@@ -20,9 +20,11 @@ const (
 	bufSize = 64 * 1024
 )
 
+var udp = logy.New("UDP")
+
 var (
 	//ErrPacketTooSmall UDP包比IV还短，报错
-	ErrPacketTooSmall = errors.New("[udp] received packet too small")
+	ErrPacketTooSmall = errors.New("Received packet too small")
 
 	_zerononce [128]byte // read-only. 128 bytes is more than enough.
 )
@@ -109,7 +111,7 @@ func (pc *packet) WriteTo(b []byte, addr net.Addr) (int, error) {
 func RelayPacket(ctx context.Context, p string, cip crypto.Crypto) {
 	serve, err := net.ListenPacket("udp", fmt.Sprintf(":%s", p))
 	if err != nil {
-		logy.W("[udp] net.ListenPacket:", err.Error())
+		udp.Warn("ListenPacket:", err.Error())
 		return
 	}
 
@@ -118,13 +120,13 @@ func RelayPacket(ctx context.Context, p string, cip crypto.Crypto) {
 	// serve, err = cip.PacketConn(serve)
 	serve, err = NewPacketConn(serve, cip)
 	if err != nil {
-		logy.W("[udp] codec.PacketConn:", err.Error())
+		udp.Warn("PacketConn:", err.Error())
 		return
 	}
 
 	nm := newNat()
 
-	logy.I("[udp] start linsten on port", p)
+	udp.Info("Starting listen on local port", p)
 	for {
 		select {
 		case <-ctx.Done():
@@ -133,31 +135,29 @@ func RelayPacket(ctx context.Context, p string, cip crypto.Crypto) {
 			b := make([]byte, bufSize)
 			n, addr, err := serve.ReadFrom(b)
 			if err != nil {
-				logy.W("[udp]", err.Error())
+				udp.Warn(err.Error())
 				continue
 			}
 
-			logy.D("[udp] incoming packet from", addr.String())
+			udp.Debug("Incoming packet from", addr.String())
 
 			an, s, err := spec.ResolveRemoteFromBytes(b[:n])
 			if err != nil {
-				logy.W("[udp]", err.Error())
+				udp.Warn(err.Error())
 				continue
 			}
 
 			raddr, err := net.ResolveUDPAddr("udp", s.String())
 			if err != nil {
-				logy.W("[udp]", err.Error())
+				udp.Warn(err.Error())
 				continue
 			}
-
-			logy.D("[udp] decoded remote address:", raddr.String())
 
 			pc := nm.Get(addr.String())
 			if pc == nil {
 				pc, err = net.ListenPacket("udp", "") //新建监听用于接收目标地址的返回数据
 				if err != nil {
-					logy.W("[udp] remote listen error:", err.Error())
+					udp.Warn("Remote listen error:", err.Error())
 					continue
 				}
 
@@ -166,7 +166,7 @@ func RelayPacket(ctx context.Context, p string, cip crypto.Crypto) {
 
 			_, err = pc.WriteTo(b[an:n], raddr) // accept only UDPAddr despite the signature
 			if err != nil {
-				logy.W("[udp] remote write error:", err.Error())
+				udp.Warn("Remote write error:", err.Error())
 				continue
 			}
 		}
@@ -241,18 +241,18 @@ func timedCopy(dst net.PacketConn, target net.Addr, src net.PacketConn, timeout 
 				}
 			}
 
-			logy.W("[udp]", err.Error())
+			udp.Warn(err.Error())
 			return err
 		}
 
 		// server -> client: add original packet source
 		_, srcAddr, err := spec.ResolveRemoteFromString(raddr.String())
 		if err != nil {
-			logy.W("[udp]", err.Error())
+			udp.Warn(err.Error())
 			return err
 		}
 
-		logy.D("[udp] receives response from", raddr.String())
+		udp.Debug("Receives response from", raddr.String())
 
 		_, err = dst.WriteTo(append(srcAddr[:], buf[:n]...), target)
 
@@ -263,7 +263,7 @@ func timedCopy(dst net.PacketConn, target net.Addr, src net.PacketConn, timeout 
 				}
 			}
 
-			logy.W("[udp]", err.Error())
+			udp.Warn(err.Error())
 			return err
 		}
 	}

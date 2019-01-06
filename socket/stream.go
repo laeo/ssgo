@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"time"
 
@@ -14,6 +13,8 @@ import (
 
 	"github.com/SspieTeam/ssgo/spec"
 )
+
+var tcp = logy.New("TCP")
 
 type stream struct {
 	net.Conn
@@ -54,11 +55,11 @@ func (s *stream) Write(b []byte) (int, error) {
 func RelayStream(ctx context.Context, p string, cip crypto.Crypto) {
 	serve, err := net.Listen("tcp", fmt.Sprintf(":%s", p))
 	if err != nil {
-		log.Print(err)
+		tcp.Warn(err.Error())
 		return
 	}
 
-	logy.I("[tcp] start listen on port", p)
+	tcp.Info("Starting listen on local port", p)
 
 	for {
 		select {
@@ -67,17 +68,17 @@ func RelayStream(ctx context.Context, p string, cip crypto.Crypto) {
 		default:
 			conn, err := serve.Accept()
 			if err != nil {
-				logy.W("[tcp]", err.Error())
+				tcp.Warn(err.Error())
 				continue
 			}
 
-			logy.D("[tcp] incoming conn from", conn.RemoteAddr().String())
+			tcp.Debug("Incoming connection from", conn.RemoteAddr().String())
 
 			conn.(*net.TCPConn).SetKeepAlive(true)
 
 			sc, err := NewStreamConn(conn, cip)
 			if err != nil {
-				logy.W("[tcp] codec.StreamConn occurred:", err.Error())
+				tcp.Warn("NewStreamConn:", err.Error())
 				conn.Close()
 				continue
 			}
@@ -90,29 +91,21 @@ func RelayStream(ctx context.Context, p string, cip crypto.Crypto) {
 func handleTCPConn(local net.Conn) {
 	defer func() {
 		local.Close()
-		logy.D("[tcp] local conn closed", local.RemoteAddr().String())
+		tcp.Debug("Local connection closed", local.RemoteAddr().String())
 	}()
 
 	_, a, err := spec.ResolveRemoteFromReader(local)
 	if err != nil {
-		logy.W("[tcp]", err.Error())
+		tcp.Warn(err.Error())
 		return
 	}
 
 	target := a.String()
-
-	logy.D("[tcp] decoded remote address:", target)
-
 	remote, err := net.Dial("tcp", target)
 	if err != nil {
-		logy.W("[tcp] dialling remote:", err.Error())
+		tcp.Warn("Dialling remote:", err.Error())
 		return
 	}
-
-	defer func() {
-		remote.Close()
-		logy.D("[tcp] remote conn closed", remote.RemoteAddr().String())
-	}()
 
 	remote.(*net.TCPConn).SetKeepAlive(true)
 
@@ -120,7 +113,7 @@ func handleTCPConn(local net.Conn) {
 		_, err := io.Copy(remote, local)
 		if err != nil {
 			if err, ok := err.(net.Error); !ok || !err.Timeout() {
-				logy.W("[tcp] relay local => remote occurred", err.Error())
+				tcp.Warn("Relay local <=> remote:", err.Error())
 			}
 		}
 
@@ -131,10 +124,15 @@ func handleTCPConn(local net.Conn) {
 	_, err = io.Copy(local, remote)
 	if err != nil {
 		if err, ok := err.(net.Error); !ok || !err.Timeout() {
-			logy.W("[tcp] relay remote => local occurred", err.Error())
+			tcp.Warn("Relay remote <=> local:", err.Error())
 		}
 	}
 
 	local.SetDeadline(time.Now())
 	remote.SetDeadline(time.Now())
+
+	err = remote.Close()
+	if err != nil {
+		tcp.Warn("Close remote connection:", err.Error())
+	}
 }
