@@ -15,33 +15,34 @@ import (
 )
 
 var opt struct {
-	debug  bool
-	port   int
-	secret string
+	Debug  bool
+	Port   int
+	Secret string
+	Method string
 }
 
 func init() {
-	flag.BoolVar(&opt.debug, "debug", false, "Enable debug mode.")
-	flag.IntVar(&opt.port, "p", 10001, "Port number for client connect.")
-	flag.StringVar(&opt.secret, "k", "secrets", "Password for authentication.")
+	flag.BoolVar(&opt.Debug, "debug", false, "Enable debug mode.")
+	flag.StringVar(&opt.Method, "m", "aes-192-gcm", "Cipher method, one of aes-192-gcm")
+	flag.IntVar(&opt.Port, "p", 1025, "Port number for client connect.")
+	flag.StringVar(&opt.Secret, "k", "secrets", "Password for authentication.")
 	flag.Parse()
 	logy.Std().SetWriteLevel(1)
+	if opt.Debug {
+		logy.Std().SetWriteLevel(0)
+	}
 }
 
 func main() {
-	if opt.debug {
-		logy.Std().SetWriteLevel(0)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
-	cip, err := crypto.New(opt.secret)
+	cip, err := crypto.NewWith("AES-192-GCM", opt.Secret)
 	if err != nil {
 		logy.Std().Error(err.Error())
 	}
 
-	go socket.RelayStream(ctx, strconv.Itoa(opt.port), cip)
-	go socket.RelayPacket(ctx, strconv.Itoa(opt.port), cip)
+	go socket.RelayStream(ctx, strconv.Itoa(opt.Port), cip)
+	go socket.RelayPacket(ctx, strconv.Itoa(opt.Port), cip)
 
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt, os.Kill)

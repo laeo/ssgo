@@ -1,4 +1,6 @@
 github.com/go-mango/logy v0.0.0-20181129153336-8ef0f71bfecd h1:YiBgtUTywh6vKaG5CFoqNTFsmEZk6o950vc6sZXodkA=
 github.com/go-mango/logy v0.0.0-20181129153336-8ef0f71bfecd/go.mod h1:Mt6GXWVrRBwaK8SXQlh0h7RN84bpi5HF0FtP2FC9bL4=
+github.com/go-mango/logy v0.0.0-20190106192939-a52326a1786b h1:cYWDcbwsQIJi64oclpU3nFylymW4l8yAxDTzGCBQ9nE=
+github.com/go-mango/logy v0.0.0-20190106192939-a52326a1786b/go.mod h1:Mt6GXWVrRBwaK8SXQlh0h7RN84bpi5HF0FtP2FC9bL4=
 golang.org/x/crypto v0.0.0-20190103213133-ff983b9c42bc h1:F5tKCVGp+MUAHhKp5MZtGqAlGX3+oCsiL1Q629FL90M=
 golang.org/x/crypto v0.0.0-20190103213133-ff983b9c42bc/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=

@@ -24,7 +24,7 @@ func gcmFactory(key []byte) (cipher.AEAD, error) {
 	return cipher.NewGCMWithNonceSize(blk, 12)
 }
 
-func NewGCM(psk []byte) (Crypto, error) {
+func newGCM(psk []byte) (Crypto, error) {
 	if len(psk) != 24 {
 		return nil, aes.KeySizeError(24)
 	}
@@ -58,14 +58,6 @@ func (g *gcm) Decrypter(salt []byte) (cipher.AEAD, error) {
 	return g.factory(subkey)
 }
 
-// func (g *gcm) StreamConn(sc net.Conn) (net.Conn, error) {
-// 	return socket.NewStreamConn(sc, g)
-// }
-
-// func (g *gcm) PacketConn(pc net.PacketConn) (net.PacketConn, error) {
-// 	return socket.NewPacketConn(pc, g)
-// }
-
 // key-derivation function from original Shadowsocks
 func kdf(password string, keyLen int) []byte {
 	var b, prev []byte
@@ -86,4 +78,18 @@ func hkdfSHA1(secret, salt, info, outkey []byte) {
 	if _, err := io.ReadFull(r, outkey); err != nil {
 		panic(err) // should never happen
 	}
+}
+
+// NewAES192GCM create cipher of AES-192-GCM.
+func NewAES192GCM(pwd string) (Crypto, error) {
+	key := kdf(pwd, 24) //AES-192-GCM
+	if len(key) != 24 {
+		return nil, aes.KeySizeError(24)
+	}
+
+	return newGCM(key)
+}
+
+func init() {
+	Regist("AES-192-GCM", NewAES192GCM)
 }

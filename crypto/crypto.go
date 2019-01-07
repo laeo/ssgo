@@ -1,8 +1,9 @@
 package crypto
 
 import (
-	"crypto/aes"
 	"crypto/cipher"
+	"errors"
+	"strings"
 )
 
 //Crypto 编解码器接口
@@ -11,16 +12,36 @@ type Crypto interface {
 	SaltSize() int
 	Encrypter(salt []byte) (cipher.AEAD, error)
 	Decrypter(salt []byte) (cipher.AEAD, error)
-	// StreamConn(net.Conn) (net.Conn, error)
-	// PacketConn(net.PacketConn) (net.PacketConn, error)
 }
 
-//New 创建编解码器
-func New(pwd string) (Crypto, error) {
-	key := kdf(pwd, 24) //AES-192-GCM
-	if len(key) != 24 {
-		return nil, aes.KeySizeError(24)
+// CipherFactor create cipher with built-in logic.
+type CipherFactor func(k string) (Crypto, error)
+
+var (
+	factors = map[string]CipherFactor{}
+)
+
+// Regist adds new cipher.
+func Regist(name string, factor CipherFactor) {
+	factors[name] = factor
+}
+
+// ResolveFactor resolves factor function by given name.
+func ResolveFactor(name string) (CipherFactor, error) {
+	if factor, ok := factors[name]; ok {
+		return factor, nil
 	}
 
-	return NewGCM(key)
+	return nil, errors.New("undefined cipher factor of " + name)
+}
+
+// NewWith create cipher by uppercased method and key.
+func NewWith(m string, k string) (Crypto, error) {
+	m = strings.ToUpper(m)
+	factor, err := ResolveFactor(m)
+	if err != nil {
+		return nil, err
+	}
+
+	return factor(k)
 }

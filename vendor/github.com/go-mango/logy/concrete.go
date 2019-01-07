@@ -12,7 +12,7 @@ import (
 )
 
 type logy struct {
-	sync.Mutex
+	*sync.Mutex
 	name       string
 	writer     *tabwriter.Writer
 	funnel     int
@@ -30,9 +30,20 @@ func (l *logy) SetWriteLevel(lv int) {
 }
 
 // SetDateFormat sets date format of message creation time.
-// RTFM：https://golang.org/src/time/format.go
+// RTFM https://golang.org/src/time/format.go
 func (l *logy) SetDateFormat(f string) {
 	l.dateFormat = f
+}
+
+// SetName set logy name.
+func (l *logy) SetName(name string) {
+	l.name = name
+}
+
+// Clone returns cloned logy struct.
+func (l *logy) Clone() Logy {
+	n := *l
+	return &n
 }
 
 func (l *logy) print(lv int, s ...string) {

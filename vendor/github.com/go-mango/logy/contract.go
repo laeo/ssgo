@@ -7,6 +7,8 @@ type Logy interface {
 	SetOutput(io.Writer)
 	SetWriteLevel(int)
 	SetDateFormat(string)
+	SetName(string)
+	Clone() Logy
 
 	// Debug prints all given string variables.
 	Debug(...string)

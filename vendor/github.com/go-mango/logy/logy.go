@@ -12,6 +12,13 @@ func Std() Logy {
 	return std
 }
 
+// Clone returns cloned Logy struct.
+func Clone(name string) Logy {
+	logger := std.Clone()
+	logger.SetName(name)
+	return logger
+}
+
 // levels
 const (
 	levelDebug = iota
@@ -52,7 +59,7 @@ var (
 // New create and return new Logy instance.
 func New(name string) Logy {
 	l := &logy{
-		sync.Mutex{},
+		new(sync.Mutex),
 		name,
 		nil,
 		levelDebug,
